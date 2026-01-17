@@ -1,8 +1,18 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io
 
 app = FastAPI()
+
+# === CORS FIX ===
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   # sementara buka semua (aman untuk testing)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def root():
@@ -27,14 +37,11 @@ async def compare_bom(file: UploadFile = File(...)):
         merged = bom1.merge(bom2, on='PartNo', how='outer', suffixes=('_bom1', '_bom2'))
         merged = merged.merge(bom3, on='PartNo', how='outer')
         merged = merged.rename(columns={'Qty': 'Qty_bom3'})
-
         merged = merged.fillna(0)
 
         def status(row):
             q = [row['Qty_bom1'], row['Qty_bom2'], row['Qty_bom3']]
-            if all(x == q[0] for x in q):
-                return 'OK'
-            return 'MISMATCH'
+            return "OK" if q[0] == q[1] == q[2] else "MISMATCH"
 
         merged['Status'] = merged.apply(status, axis=1)
 
