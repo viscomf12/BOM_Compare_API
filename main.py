@@ -2,21 +2,16 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io
+import base64
 
 app = FastAPI()
 
-# === CORS FIX ===
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # sementara buka semua (aman untuk testing)
-    allow_credentials=True,
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/")
-def root():
-    return {"status": "running"}
 
 def load_bom(excel, sheet):
     df = pd.read_excel(excel, sheet_name=sheet)
@@ -45,7 +40,18 @@ async def compare_bom(file: UploadFile = File(...)):
 
         merged['Status'] = merged.apply(status, axis=1)
 
-        return merged.to_dict(orient='records')
+        # === GENERATE EXCEL IN MEMORY ===
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            merged.to_excel(writer, index=False, sheet_name='CompareResult')
+
+        output.seek(0)
+        encoded = base64.b64encode(output.read()).decode()
+
+        return {
+            "fileName": "BOM_Compare_Result.xlsx",
+            "fileBase64": encoded
+        }
 
     except Exception as e:
         return {"error": str(e)}
