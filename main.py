@@ -23,8 +23,8 @@ def load_bom(excel: pd.ExcelFile, sheet: str) -> pd.DataFrame:
 
 # === REQUEST MODEL ===
 class AttachmentContent(BaseModel):
-    content: str = Field(..., alias='$content')
-    content_type: str = Field(..., alias='$content-type')
+    content_type: str = Field(..., alias='$content-type')  # Bisa muncul dulu di JSON
+    content: str = Field(..., alias='$content')           # Baru kemudian $content
 
 # === API ENDPOINT ===
 @app.post("/compare-bom-pa")
