@@ -1,5 +1,6 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 import pandas as pd
 import io
 import base64
@@ -13,17 +14,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Model JSON untuk menerima file dari Power Automate
+class BOMFile(BaseModel):
+    filename: str
+    content: str  # base64 string
+
 def load_bom(excel, sheet):
     df = pd.read_excel(excel, sheet_name=sheet)
     df = df[['PartNo', 'Qty']]
     df = df.groupby('PartNo', as_index=False).sum()
     return df
 
-@app.post("/compare-bom")
-async def compare_bom(file: UploadFile = File(...)):
+@app.post("/compare-bom-json")
+async def compare_bom_json(file: BOMFile):
     try:
-        content = await file.read()
-        excel = pd.ExcelFile(io.BytesIO(content))
+        # decode base64 menjadi bytes
+        file_bytes = base64.b64decode(file.content)
+        excel = pd.ExcelFile(io.BytesIO(file_bytes))
 
         bom1 = load_bom(excel, 'bom1')
         bom2 = load_bom(excel, 'bom2')
@@ -49,7 +56,7 @@ async def compare_bom(file: UploadFile = File(...)):
         encoded = base64.b64encode(output.read()).decode()
 
         return {
-            "fileName": "BOM_Compare_Result.xlsx",
+            "fileName": f"BOM_Compare_Result_{file.filename}",
             "fileBase64": encoded
         }
 
