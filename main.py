@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import pandas as pd
 import io
 import base64
@@ -23,18 +23,18 @@ def load_bom(excel: pd.ExcelFile, sheet: str) -> pd.DataFrame:
 
 # === REQUEST MODEL ===
 class AttachmentContent(BaseModel):
-    $content: str
-    $content_type: str
+    content: str = Field(..., alias='$content')
+    content_type: str = Field(..., alias='$content-type')
 
 # === API ENDPOINT ===
 @app.post("/compare-bom-pa")
 async def compare_bom_pa(body: AttachmentContent):
     try:
-        # Decode base64 to bytes
-        file_bytes = base64.b64decode(body.$content)
+        # Decode base64 ke bytes
+        file_bytes = base64.b64decode(body.content)
         excel = pd.ExcelFile(io.BytesIO(file_bytes))
 
-        # Load BOMs
+        # Load BOM sheets
         bom1 = load_bom(excel, 'bom1')
         bom2 = load_bom(excel, 'bom2')
         bom3 = load_bom(excel, 'bom3')
@@ -44,7 +44,7 @@ async def compare_bom_pa(body: AttachmentContent):
         merged = merged.merge(bom3, on='PartNo', how='outer')
         merged = merged.rename(columns={'Qty': 'Qty_bom3'}).fillna(0)
 
-        # Status column
+        # Add Status
         def status(row):
             q = [row['Qty_bom1'], row['Qty_bom2'], row['Qty_bom3']]
             return "OK" if q[0] == q[1] == q[2] else "MISMATCH"
