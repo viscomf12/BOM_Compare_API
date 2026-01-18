@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import io
@@ -26,26 +26,30 @@ def load_bom(excel: pd.ExcelFile, sheet: str) -> pd.DataFrame:
     df = df.groupby('PartNo', as_index=False).sum()
     return df
 
-# === API ENDPOINT TO COMPARE BOM FILE ===
-@app.post("/compare-bom")
-async def compare_bom(file: UploadFile = File(...)):
+# === API ENDPOINT TO COMPARE BOM FILE (RAW BYTES) ===
+@app.post("/compare-bom-raw")
+async def compare_bom_raw(request: Request):
+    """
+    Endpoint menerima raw file bytes di body.
+    Cocok untuk Power Automate HTTP action.
+    """
     try:
-        # Read uploaded Excel file
-        content = await file.read()
+        # === READ FILE CONTENT FROM REQUEST BODY ===
+        content = await request.body()
         excel = pd.ExcelFile(io.BytesIO(content))
 
-        # Load BOM sheets
+        # === LOAD BOM SHEETS ===
         bom1 = load_bom(excel, 'bom1')
         bom2 = load_bom(excel, 'bom2')
         bom3 = load_bom(excel, 'bom3')
 
-        # Merge BOMs on 'PartNo'
+        # === MERGE BOMs ===
         merged = bom1.merge(bom2, on='PartNo', how='outer', suffixes=('_bom1', '_bom2'))
         merged = merged.merge(bom3, on='PartNo', how='outer')
         merged = merged.rename(columns={'Qty': 'Qty_bom3'})
         merged = merged.fillna(0)
 
-        # Add comparison status
+        # === ADD STATUS COLUMN ===
         def status(row):
             q = [row['Qty_bom1'], row['Qty_bom2'], row['Qty_bom3']]
             return "OK" if q[0] == q[1] == q[2] else "MISMATCH"
@@ -58,9 +62,10 @@ async def compare_bom(file: UploadFile = File(...)):
             merged.to_excel(writer, index=False, sheet_name='CompareResult')
         output.seek(0)
 
-        # Encode Excel to Base64 for response
+        # === ENCODE EXCEL TO BASE64 ===
         encoded = base64.b64encode(output.read()).decode()
 
+        # === RETURN RESPONSE ===
         return {
             "fileName": "BOM_Compare_Result.xlsx",
             "fileBase64": encoded
